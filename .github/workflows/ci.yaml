@@ -35,8 +35,6 @@ jobs:
 
     - name: Install dependencies
       run: |
-        python -m venv venv
-        source venv/bin/activate
         pip install --upgrade pip
         pip install -r rgz/requirements.txt
         pip install bandit pytest psycopg2-binary
@@ -48,13 +46,10 @@ jobs:
         echo "DB_NAME=${{ secrets.DB_NAME }}" >> $GITHUB_ENV
 
     - name: Run migrations
-      run: |
-        source venv/bin/activate
-        python rgz/migrator.py
+      run: python rgz/migrator.py
 
     - name: Create test user
       run: |
-        source venv/bin/activate
         psql postgresql://$DB_USER:$DB_PASSWORD@localhost:5432/$DB_NAME <<'SQL'
         INSERT INTO users(id, name)
         SELECT 1, 'TestUser'
@@ -62,11 +57,7 @@ jobs:
         SQL
 
     - name: Run tests
-      run: |
-        source venv/bin/activate
-        pytest -v rgz/tests --ignore=rgz/venv
+      run: pytest -v rgz/tests --ignore=rgz/venv
 
     - name: Run bandit security scan
-      run: |
-        source venv/bin/activate
-        bandit -r rgz --exclude rgz/venv
+      run: bandit -r rgz --exclude rgz/venv
