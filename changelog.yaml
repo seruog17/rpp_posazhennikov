@@ -1,0 +1,8 @@
+- id: 1
+  file_path: "migrations/001_create_users_table.sql"
+
+- id: 2
+  file_path: "migrations/002_create_subscriptions_table.sql"
+
+- id: 3
+  file_path: "migrations/003_create_audit_table.sql"

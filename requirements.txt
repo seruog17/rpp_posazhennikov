@@ -1,0 +1,9 @@
+flask
+flasgger
+flask-login
+sqlalchemy
+psycopg2-binary
+pyyaml
+pytest
+requests
+bandit
