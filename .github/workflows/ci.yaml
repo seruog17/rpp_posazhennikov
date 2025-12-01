@@ -14,15 +14,15 @@ jobs:
       postgres:
         image: postgres:15
         env:
-          POSTGRES_USER: test_user
-          POSTGRES_PASSWORD: test_pass
-          POSTGRES_DB: test_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U test_user" 
-          --health-interval 10s 
-          --health-timeout 5s 
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
           --health-retries 5
 
     steps:
@@ -35,29 +35,27 @@ jobs:
 
     - name: Install dependencies
       run: |
-        pip install --upgrade pip
-        pip install -r rgz/requirements.txt
-        pip install bandit pytest psycopg2-binary
+        pip install -r requirements.txt
 
-    - name: Set environment variables
+    - name: Setup database
+      env:
+        PGPASSWORD: postgres
       run: |
-        echo "DB_USER=${{ secrets.DB_USER }}" >> $GITHUB_ENV
-        echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> $GITHUB_ENV
-        echo "DB_NAME=${{ secrets.DB_NAME }}" >> $GITHUB_ENV
+        psql -h localhost -U postgres -c "CREATE USER sub_user WITH PASSWORD 'sub_pass';"
+        psql -h localhost -U postgres -c "CREATE DATABASE subscriptions_db OWNER sub_user;"
+        psql -h localhost -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE subscriptions_db TO sub_user;"
 
     - name: Run migrations
-      run: python rgz/migrator.py
-
-    - name: Create test user
-      run: |
-        psql postgresql://$DB_USER:$DB_PASSWORD@localhost:5432/$DB_NAME <<'SQL'
-        INSERT INTO users(id, name)
-        SELECT 1, 'TestUser'
-        WHERE NOT EXISTS (SELECT 1 FROM users WHERE id = 1);
-        SQL
+      env:
+        DATABASE_URL: postgresql://sub_user:sub_pass@localhost:5432/subscriptions_db
+      run: python migrator.py
 
     - name: Run tests
-      run: pytest -v rgz/tests --ignore=rgz/venv
+      env:
+        DATABASE_URL: postgresql://sub_user:sub_pass@localhost:5432/subscriptions_db
+      run: |
+        python -m pytest tests/test_api.py -v
 
-    - name: Run bandit security scan
-      run: bandit -r rgz --exclude rgz/venv
+    - name: Run bandit
+      run: |
+        bandit -r .
