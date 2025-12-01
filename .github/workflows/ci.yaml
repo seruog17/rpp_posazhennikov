@@ -85,9 +85,9 @@ jobs:
         PYTHONPATH: ${{ github.workspace }}
         DATABASE_URL: postgresql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@localhost:5432/${{ secrets.DB_NAME }}
       run: |
-        pytest -v
+        pytest -v rgz/tests
 
     - name: Security scan
       run: |
         pip install bandit
-        bandit -r .
+        bandit -r rgz --exclude rgz/venv
