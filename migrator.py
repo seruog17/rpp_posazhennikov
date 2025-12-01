@@ -54,5 +54,9 @@ def run_migrations():
             cur.execute("INSERT INTO migrations_log (migration_id, file_path) VALUES (%s, %s)",
                         (migration["id"], migration["file_path"]))
             conn.commit()
+    
+    cur.execute("INSERT INTO users (id, name) VALUES (1, 'Test User') ON CONFLICT (id) DO NOTHING")
+    conn.commit()
+    
     cur.close()
     conn.close()

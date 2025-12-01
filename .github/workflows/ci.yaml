@@ -50,12 +50,6 @@ jobs:
         DATABASE_URL: postgresql://sub_user:sub_pass@localhost:5432/subscriptions_db
       run: python migrator.py
 
-    - name: Create test user
-      env:
-        PGPASSWORD: sub_pass
-      run: |
-        psql -h localhost -U sub_user -d subscriptions_db -c "INSERT INTO users (id, name) VALUES (1, 'Test User');"
-
     - name: Run tests
       env:
         DATABASE_URL: postgresql://sub_user:sub_pass@localhost:5432/subscriptions_db
