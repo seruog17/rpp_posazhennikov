@@ -9,6 +9,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+
     services:
       postgres:
         image: postgres:15
@@ -19,7 +20,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd="pg_isready -U ${{ secrets.DB_USER }} -d ${{ secrets.DB_NAME }}"
+          --health-cmd "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"
           --health-interval=5s
           --health-timeout=5s
           --health-retries=10
@@ -28,7 +29,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Install Python
+      - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.12"
@@ -38,16 +39,30 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Export DB variables
+      - name: Export DATABASE_URL for steps
         run: |
-          echo "DB_USER=${{ secrets.DB_USER }}" >> $GITHUB_ENV
-          echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> $GITHUB_ENV
-          echo "DB_NAME=${{ secrets.DB_NAME }}" >> $GITHUB_ENV
-          echo "DB_HOST=${{ secrets.DB_HOST }}" >> $GITHUB_ENV
+          echo "DATABASE_URL=postgresql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@localhost:5432/${{ secrets.DB_NAME }}" >> $GITHUB_ENV
+
+      - name: Wait for Postgres to be ready
+        run: |
+          for i in {1..30}; do
+            pg_isready -h localhost -p 5432 -U "${{ secrets.DB_USER }}" -d "${{ secrets.DB_NAME }}" && break
+            echo "Waiting for Postgres..."
+            sleep 1
+          done
 
       - name: Run migrations
-        run: python migrator.py
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+        run: python3 migrator.py
 
       - name: Run tests
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
         run: |
           pytest -v
+
+      - name: Security scan (bandit)
+        run: |
+          pip install bandit
+          bandit -r .
