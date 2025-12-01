@@ -10,7 +10,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:14
+        image: postgres:15
         env:
           POSTGRES_USER: ${{ secrets.DB_USER }}
           POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
@@ -18,41 +18,76 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd="pg_isready -U ${{ secrets.DB_USER }} -d ${{ secrets.DB_NAME }}"
+          --health-cmd="pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"
           --health-interval=5s
           --health-timeout=5s
-          --health-retries=5
+          --health-retries=10
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install deps
-      run: pip install -r requirements.txt
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
 
-    - name: Wait for PostgreSQL
-      run: sleep 10
-
-    - name: Run migrations
+    - name: Install dependencies
       run: |
-        psql postgresql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@localhost:5432/${{ secrets.DB_NAME }} <<EOF
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Wait for Postgres
+      run: |
+        for i in {1..30}; do
+          pg_isready -h localhost -p 5432 -U "${{ secrets.DB_USER }}" -d "${{ secrets.DB_NAME }}" && break
+          sleep 1
+        done
+
+    - name: Run migrations (ensure schema)
+      run: |
+        psql postgresql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@localhost:5432/${{ secrets.DB_NAME }} <<'SQL'
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
-            name VARCHAR(100)
+            name TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS subscriptions (
             id SERIAL PRIMARY KEY,
-            user_id INT REFERENCES users(id),
-            name VARCHAR(100),
-            amount INT,
-            period VARCHAR(50),
-            start_date DATE
+            user_id INTEGER REFERENCES users(id),
+            name TEXT NOT NULL,
+            amount NUMERIC,
+            period TEXT,
+            start_date DATE,
+            next_payment DATE
         );
-        EOF
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id SERIAL PRIMARY KEY,
+            subscription_id INTEGER,
+            action TEXT,
+            action_date TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS migrations_log (
+            id SERIAL PRIMARY KEY,
+            migration_id INTEGER,
+            file_path TEXT
+        );
+        SQL
 
-    - name: Create test user
+    - name: Create test user if not exists
       run: |
-        psql postgresql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@localhost:5432/${{ secrets.DB_NAME }} \
-        -c "INSERT INTO users (id,name) VALUES (1,'TestUser');"
+        psql postgresql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@localhost:5432/${{ secrets.DB_NAME }} <<'SQL'
+        INSERT INTO users(id, name)
+        SELECT 1, 'TestUser'
+        WHERE NOT EXISTS (SELECT 1 FROM users WHERE id = 1);
+        SQL
 
     - name: Run tests
-      run: pytest -v
+      env:
+        PYTHONPATH: ${{ github.workspace }}
+        DATABASE_URL: postgresql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@localhost:5432/${{ secrets.DB_NAME }}
+      run: |
+        pytest -v
+
+    - name: Security scan
+      run: |
+        pip install bandit
+        bandit -r .
