@@ -14,21 +14,16 @@ jobs:
       postgres:
         image: postgres:15
         env:
-          POSTGRES_USER: ${{ secrets.DB_USER }}
-          POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          POSTGRES_DB: ${{ secrets.DB_NAME }}
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_pass
+          POSTGRES_DB: test_db
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U ${{ secrets.DB_USER }}" 
+          --health-cmd "pg_isready -U test_user" 
           --health-interval 10s 
           --health-timeout 5s 
           --health-retries 5
-
-    env:
-      DB_USER: ${{ secrets.DB_USER }}
-      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-      DB_NAME: ${{ secrets.DB_NAME }}
 
     steps:
     - uses: actions/checkout@v3
@@ -44,7 +39,13 @@ jobs:
         source venv/bin/activate
         pip install --upgrade pip
         pip install -r rgz/requirements.txt
-        pip install bandit pytest
+        pip install bandit pytest psycopg2-binary
+
+    - name: Set environment variables
+      run: |
+        echo "DB_USER=${{ secrets.DB_USER }}" >> $GITHUB_ENV
+        echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> $GITHUB_ENV
+        echo "DB_NAME=${{ secrets.DB_NAME }}" >> $GITHUB_ENV
 
     - name: Run migrations
       run: |
